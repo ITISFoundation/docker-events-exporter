@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	docker "github.com/docker/docker/client"
@@ -70,7 +71,12 @@ func main() {
 	defer cancel()
 
 	go func() {
-		eventsChan, errChan := cli.Events(ctx, types.EventsOptions{})
+		oneMinAgo := time.Now().Add(-1 * time.Minute)
+		eventsFilter := types.EventsOptions{
+			Since: oneMinAgo.Format(time.RFC3339Nano),
+			Until: time.Now().Add(-1 * time.Second).Format(time.RFC3339Nano),
+		}
+		eventsChan, errChan := cli.Events(ctx, eventsFilter)
 
 		for {
 			select {
