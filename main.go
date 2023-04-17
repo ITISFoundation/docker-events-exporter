@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	docker "github.com/docker/docker/client"
@@ -50,15 +51,15 @@ func main() {
 
 	reg := prometheus.NewRegistry()
 
-	counter := prometheus.NewCounterVec(prometheus.CounterOpts{
+	gauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "docker_events",
 		Help: "Number of docker container events",
-	}, []string{"type", "action", "scope", "from", "name", "namespace", "service_name", "node_id", "service_id"})
+	}, []string{"type", "action", "scope", "from", "name", "namespace"})
 
 	reg.MustRegister(
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		counter,
+		gauge,
 	)
 
 	http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg}))
@@ -70,14 +71,47 @@ func main() {
 	defer cancel()
 
 	go func() {
-		eventsChan, errChan := cli.Events(ctx, types.EventsOptions{})
+		oneMinAgo := time.Now().Add(-1 * time.Minute)
+		eventsFilter := types.EventsOptions{
+			Since: oneMinAgo.Format(time.RFC3339Nano),
+		}
+		eventsChan, errChan := cli.Events(ctx, eventsFilter)
 
 		for {
 			select {
 			case event := <-eventsChan:
 				switch event.Type {
 				case "container":
+					labelNameField := event.Actor.Attributes["com.docker.swarm.service.name"]
+					if labelNameField == "" { // if it is not a swam service, use the container name
+						labelNameField = event.Actor.Attributes["name"]
+					}
 					switch event.Action {
+					case "start":
+						gauge.WithLabelValues(
+							event.Type,
+							"oom",
+							event.Scope,
+							event.Actor.Attributes["image"],
+							labelNameField,
+							event.Actor.Attributes["com.docker.stack.namespace"],
+						).Set(0)
+						gauge.WithLabelValues(
+							event.Type,
+							"kill",
+							event.Scope,
+							event.Actor.Attributes["image"],
+							labelNameField,
+							event.Actor.Attributes["com.docker.stack.namespace"],
+						).Set(0)
+						gauge.WithLabelValues(
+							event.Type,
+							"die",
+							event.Scope,
+							event.Actor.Attributes["image"],
+							labelNameField,
+							event.Actor.Attributes["com.docker.stack.namespace"],
+						).Set(0)
 					case "die":
 						// do not report containers that exited correctly
 						if event.Actor.Attributes["exitCode"] == "0" {
@@ -87,16 +121,13 @@ func main() {
 					case "oom":
 						fallthrough
 					case "kill":
-						counter.WithLabelValues(
+						gauge.WithLabelValues(
 							event.Type,
 							event.Action,
 							event.Scope,
 							event.Actor.Attributes["image"],
-							event.Actor.Attributes["name"],
+							labelNameField,
 							event.Actor.Attributes["com.docker.stack.namespace"],
-							event.Actor.Attributes["com.docker.swarm.service.name"],
-							event.Actor.Attributes["com.docker.swarm.node.id"],
-							event.Actor.Attributes["com.docker.swarm.service.id"],
 						).Inc()
 					}
 				}
