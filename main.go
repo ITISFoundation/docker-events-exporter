@@ -96,31 +96,7 @@ func main() {
 							labelNameField,
 							event.Actor.Attributes["com.docker.stack.namespace"],
 						).Set(0)
-						gauge.WithLabelValues(
-							event.Type,
-							"kill",
-							event.Scope,
-							event.Actor.Attributes["image"],
-							labelNameField,
-							event.Actor.Attributes["com.docker.stack.namespace"],
-						).Set(0)
-						gauge.WithLabelValues(
-							event.Type,
-							"die",
-							event.Scope,
-							event.Actor.Attributes["image"],
-							labelNameField,
-							event.Actor.Attributes["com.docker.stack.namespace"],
-						).Set(0)
-					case "die":
-						// do not report containers that exited correctly
-						if event.Actor.Attributes["exitCode"] == "0" {
-							continue
-						}
-						fallthrough
 					case "oom":
-						fallthrough
-					case "kill":
 						gauge.WithLabelValues(
 							event.Type,
 							event.Action,
