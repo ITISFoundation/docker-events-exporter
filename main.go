@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -33,6 +34,15 @@ import (
 )
 
 var listenAddr = flag.String("listen.addr", ":8000", "Listen address")
+
+func removeUUID(input string) string {
+	uuidPattern := "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+	regex := regexp.MustCompile(uuidPattern)
+	for regex.MatchString(input) {
+		input = regex.ReplaceAllString(input, "REMOVED_UUID")
+	}
+	return input
+}
 
 func main() {
 	flag.Parse()
@@ -86,6 +96,8 @@ func main() {
 					if labelNameField == "" { // if it is not a swam service, use the container name
 						labelNameField = event.Actor.Attributes["name"]
 					}
+					// Remove UUID to reduce prometheus cardinality
+					labelNameField = removeUUID(labelNameField)
 					switch event.Action {
 					case "start":
 						gauge.WithLabelValues(
@@ -96,31 +108,7 @@ func main() {
 							labelNameField,
 							event.Actor.Attributes["com.docker.stack.namespace"],
 						).Set(0)
-						gauge.WithLabelValues(
-							event.Type,
-							"kill",
-							event.Scope,
-							event.Actor.Attributes["image"],
-							labelNameField,
-							event.Actor.Attributes["com.docker.stack.namespace"],
-						).Set(0)
-						gauge.WithLabelValues(
-							event.Type,
-							"die",
-							event.Scope,
-							event.Actor.Attributes["image"],
-							labelNameField,
-							event.Actor.Attributes["com.docker.stack.namespace"],
-						).Set(0)
-					case "die":
-						// do not report containers that exited correctly
-						if event.Actor.Attributes["exitCode"] == "0" {
-							continue
-						}
-						fallthrough
 					case "oom":
-						fallthrough
-					case "kill":
 						gauge.WithLabelValues(
 							event.Type,
 							event.Action,
