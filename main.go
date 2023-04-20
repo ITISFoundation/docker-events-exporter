@@ -36,7 +36,7 @@ import (
 var listenAddr = flag.String("listen.addr", ":8000", "Listen address")
 
 func removeUUID(input string) string {
-	uuidPattern := "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+	uuidPattern := "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 	regex := regexp.MustCompile(uuidPattern)
 	for regex.MatchString(input) {
 		input = regex.ReplaceAllString(input, "REMOVED_UUID")
