@@ -33,7 +33,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ github.repository_owner }}/${{ github.repository }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
